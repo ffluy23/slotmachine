@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>slot</title>
+
+<style>
+
+@font-face {
+font-family:'RoundedFixedsys';
+src:url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/DungGeunMo.woff') format('woff');
+font-weight:normal;
+font-display:swap;
+}
+
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+font-family:'RoundedFixedsys';
+}
+
+body{
+background:#1B1B1B;
+height:100vh;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+/* 머신 */
+
+.machine{
+width:520px;
+background:#303030;
+border-radius:22px;
+padding:30px;
+position:relative;
+}
+
+/* 페이라인 */
+
+.paylineBox{
+background:#3F3F3F;
+border-radius:22px;
+padding:25px;
+margin-bottom:60px;
+position:relative;
+}
+
+.payline{
+position:absolute;
+left:0;
+right:0;
+top:50%;
+border-top:2px dashed rgba(200,200,200,0.3);
+}
+
+/* 릴 */
+
+.reels{
+display:flex;
+gap:20px;
+justify-content:center;
+}
+
+.reel{
+width:100px;
+height:140px;
+background:#ffffff;
+border-radius:10px;
+overflow:hidden;
+position:relative;
+
+box-shadow:
+inset 0 12px 14px rgba(0,0,0,0.20),
+inset 0 -12px 14px rgba(0,0,0,0.20);
+}
+
+.strip{
+position:absolute;
+width:100%;
+top:0;
+}
+
+.symbol{
+height:140px;
+display:flex;
+align-items:center;
+justify-content:center;
+font-size:48px;
+}
+
+/* 버튼 */
+
+.controls{
+position:absolute;
+left:30px;
+bottom:20px;
+display:flex;
+gap:12px;
+}
+
+button{
+background:#ef4444;
+color:#ffffff;
+border:none;
+padding:10px 16px;
+border-radius:8px;
+font-size:16px;
+cursor:pointer;
+}
+
+/* 결과 */
+
+.result{
+color:#F5F5F5;
+position:absolute;
+right:30px;
+bottom:20px;
+text-align:right;
+}
+
+#resultText{
+margin-top:6px;
+}
+
+.win{color:#facc15}
+
+
+</style>
+</head>
+
+
+<body>
+
+<div class="machine">
+
+<div class="paylineBox">
+
+<div class="reels">
+
+<div class="reel"><div class="strip" id="strip0"></div></div>
+<div class="reel"><div class="strip" id="strip1"></div></div>
+<div class="reel"><div class="strip" id="strip2"></div></div>
+
+</div>
+
+<div class="payline"></div>
+
+</div>
+
+<div class="controls">
+<button id="spinBtn">SPIN</button>
+<button id="resetBtn">RESET</button>
+</div>
+
+<div class="result">
+<div id="resultBadge">READY</div>
+<div id="resultText">—</div>
+</div>
+
+</div>
+
+
+<script>
+
+const SYMBOLS=["🍒","🍋","🍇","🍉","🔔","⭐","7️⃣"]
+
+const REEL_COUNT=3
+const ITEM_HEIGHT=140
+const SPIN_ITEMS=22
+
+const spinBtn=document.getElementById("spinBtn")
+const resetBtn=document.getElementById("resetBtn")
+const resultBadge=document.getElementById("resultBadge")
+const resultText=document.getElementById("resultText")
+
+const strips=[...Array(REEL_COUNT)].map((_,i)=>document.getElementById(`strip${i}`))
+
+let spinning=false
+
+
+function randSymbol(){
+return SYMBOLS[Math.floor(Math.random()*SYMBOLS.length)]
+}
+
+
+/* 확률 보정 */
+
+function weightedResult(){
+
+let r=Math.random()
+
+/* 777 잭팟 0.5% */
+
+if(r<0.005){
+return ["7️⃣","7️⃣","7️⃣"]
+}
+
+/* 다른 3개 동일 2% */
+
+if(r<0.025){
+
+let s
+
+do{
+s=randSymbol()
+}while(s==="7️⃣")
+
+return [s,s,s]
+
+}
+
+/* 두 개 동일 27% */
+
+if(r<0.295){
+
+let a=randSymbol()
+let b=randSymbol()
+
+while(b===a) b=randSymbol()
+
+let arr=[a,a,b]
+
+return arr.sort(()=>Math.random()-0.5)
+
+}
+
+
+let shuffled=[...SYMBOLS].sort(()=>Math.random()-0.5)
+
+return shuffled.slice(0,3)
+
+}
+
+
+
+function buildStrip(final){
+
+let items=[]
+
+for(let i=0;i<SPIN_ITEMS;i++){
+items.push(randSymbol())
+}
+
+items.push(final)
+
+const frag=document.createDocumentFragment()
+
+items.forEach(s=>{
+let d=document.createElement("div")
+d.className="symbol"
+d.textContent=s
+frag.appendChild(d)
+})
+
+const wrapper=document.createElement("div")
+wrapper.appendChild(frag)
+
+return{
+wrapper,
+totalItems:items.length
+}
+
+}
+
+
+function easeOut(t){
+return 1-Math.pow(1-t,3)
+}
+
+
+function animate(strip,target,duration){
+
+return new Promise(resolve=>{
+
+let start=performance.now()
+
+let from=getTranslate(strip)
+
+function frame(now){
+
+let t=Math.min(1,(now-start)/duration)
+let y=from+(target-from)*easeOut(t)
+
+strip.style.transform=`translateY(${y}px)`
+
+if(t<1) requestAnimationFrame(frame)
+else resolve()
+
+}
+
+requestAnimationFrame(frame)
+
+})
+
+}
+
+
+function getTranslate(el){
+
+let st=getComputedStyle(el).transform
+
+if(st==="none") return 0
+
+let m=st.match(/matrix\(([^)]+)\)/)
+
+return m?parseFloat(m[1].split(",")[5]):0
+
+}
+
+
+
+function clearStrips(){
+
+strips.forEach(s=>{
+s.innerHTML=""
+s.style.transform="translateY(0)"
+})
+
+resultBadge.textContent="READY"
+resultText.textContent="—"
+
+}
+
+
+
+async function spin(){
+
+if(spinning) return
+spinning=true
+spinBtn.disabled=true
+
+resultBadge.textContent="SPINNING"
+
+let finals=weightedResult()
+
+let built=finals.map(buildStrip)
+
+built.forEach((b,i)=>{
+
+strips[i].innerHTML=""
+strips[i].appendChild(b.wrapper)
+strips[i].style.transform="translateY(0)"
+
+})
+
+
+let targets=built.map(b=>-ITEM_HEIGHT*(b.totalItems-1))
+
+let durations=[900,1100,1300]
+let delays=[0,200,400]
+
+let promises=strips.map((strip,i)=>new Promise(async res=>{
+
+await new Promise(r=>setTimeout(r,delays[i]))
+
+await animate(strip,targets[i],durations[i])
+
+
+await animate(strip,targets[i]-12,120)
+await animate(strip,targets[i],120)
+
+res()
+
+}))
+
+await Promise.all(promises)
+
+
+/* 결과 */
+
+let[a,b,c]=finals
+
+resultText.textContent=`${a} ${b} ${c}`
+
+if(a===b && b===c){
+
+resultBadge.textContent="WIN"
+resultBadge.className="win"
+
+}else{
+
+resultBadge.textContent="LOSE"
+resultBadge.className="lose"
+
+}
+
+spinning=false
+spinBtn.disabled=false
+
+}
+
+
+
+spinBtn.onclick=spin
+resetBtn.onclick=clearStrips
+
+clearStrips()
+
+</script>
+
+</body>
+</html>
